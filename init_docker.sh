@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -euo pipefail  # Exit on errors, undefined variables
-
 #######################################
 # https://docs.docker.com/engine/install/debian/
 #######################################
