@@ -21,6 +21,9 @@ PROXY_ID= # heading 0 for single digit integers is no longer required
 > **As said in the parent repository's notice, proxy_id should be between 2 and 99.
 > The code does not trigger warnings cases outside this range.**
 
+> The docker initialization script does work but reelaunching it multiple times may return you it failed, while docker is properly installed.
+> You can check it running `proxypi --swarm-execute 1200 "docker"`.
+
 ## Scraper component
 
 nyi
