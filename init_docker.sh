@@ -4,7 +4,7 @@
 # https://docs.docker.com/engine/install/debian/
 #######################################
 # Uninstall all conflicting packages:
-sudo apt remove -y $(dpkg --get-selections docker.io docker-compose docker-doc podman-docker containerd runc | cut -f1)
+sudo apt remove -y $(dpkg --get-selections docker.io docker-compose docker-doc podman-docker containerd runc | cut -f1) || true
 
 # Add Docker's official GPG key:
 sudo apt update
