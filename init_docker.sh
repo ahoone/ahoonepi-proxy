@@ -31,14 +31,10 @@ sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin d
 #######################################
 
 # Making docker usable without sudo
-if groups | grep docker &>/dev/null; then
-    continue
-else
+if ! groups | grep docker &>/dev/null; then
     sudo groupadd docker 2>&1
 fi
 
-if getent group docker | grep $(whoami) &>/dev/null; then
-    continue
-else
+if ! getent group docker | grep $(whoami) &>/dev/null; then
     sudo usermod -aG docker "$(whoami)" 2>&1
 fi
