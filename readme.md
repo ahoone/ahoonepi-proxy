@@ -26,4 +26,10 @@ PROXY_ID= # heading 0 for single digit integers is no longer required
 
 ## Scraper component
 
-nyi
+```bash
+docker compose -f scraper/docker-compose.yml up --build -d
+```
+
+```bash
+docker compose -f scraper/docker-compose.yml down
+```

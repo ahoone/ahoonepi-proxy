@@ -1,0 +1,28 @@
+services:
+  fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/app
+    environment:
+      DISPLAY: :99
+      CHROME_EXTRA_ARGS: >-
+        --no-sandbox
+        --disable-setuid-sandbox
+    deploy:
+      resources:
+        limits:
+          memory: 1800M
+          cpus: '1.5'
+        reservations:
+          memory: 512M
+    shm_size: '512mb'
+    restart: unless-stopped
+    networks:
+      - default
+
+networks:
+  default:

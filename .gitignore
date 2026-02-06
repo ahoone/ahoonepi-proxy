@@ -1,6 +1,9 @@
 *.key
 /.env
 
+# Python shit
+__pycache__
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
