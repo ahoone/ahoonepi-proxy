@@ -36,3 +36,6 @@ fi
 if ! groups | grep docker &>/dev/null; then
     sudo usermod -aG docker "$(whoami)" 2>&1
 fi
+
+# Start docker on boot
+sudo systemctl enable docker
