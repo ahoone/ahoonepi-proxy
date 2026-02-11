@@ -45,6 +45,46 @@ app = FastAPI(
 )
 
 
+@app.get("/check-ip")
+async def check_ip(request: Request):
+    """Check what IP the server sees and if it's allowed"""
+    client_ip = request.client.host
+    
+    # Check proxy headers too
+    x_forwarded_for = request.headers.get("X-Forwarded-For")
+    x_real_ip = request.headers.get("X-Real-IP")
+    
+    try:
+        client_ip_obj = ipaddress.ip_address(client_ip)
+        
+        # Check against each network
+        network_checks = {}
+        for network in ALLOWED_NETWORKS:
+            is_in_network = client_ip_obj in network
+            network_checks[str(network)] = is_in_network
+        
+        # Overall allowed status
+        allowed = any(client_ip_obj in network for network in ALLOWED_NETWORKS)
+        
+        return {
+            "received_ip": client_ip,
+            "x_forwarded_for": x_forwarded_for,
+            "x_real_ip": x_real_ip,
+            "is_allowed": allowed,
+            "network_checks": network_checks,
+            "allowed_networks": [str(net) for net in ALLOWED_NETWORKS]
+        }
+    except ValueError as e:
+        return {
+            "received_ip": client_ip,
+            "x_forwarded_for": x_forwarded_for,
+            "x_real_ip": x_real_ip,
+            "is_allowed": False,
+            "error": f"Invalid IP address: {str(e)}",
+            "allowed_networks": [str(net) for net in ALLOWED_NETWORKS]
+        }
+
+
 @app.middleware("http")
 async def filter_ip_middleware(request: Request, call_next):
     client_ip = request.client.host
@@ -95,14 +135,14 @@ class BrowserInstance:
         """Initialize the browser (called once)"""
         if not self._initialized:
             self.browser = await uc.start(
-                headless=False,
+                headless=False,                                             # If headerless, Cloudflare spots us.
                 browser_args=[
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
                     '--disable-blink-features=AutomationControlled',
                     '--disable-features=IsolateOrigins,site-per-process',
                     '--window-size=1920,1080',
-                ],
+                ],                                                          # If images are blocked, Cloudflare spots us.
                 sandbox=False,
             )
             self._initialized = True
