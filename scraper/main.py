@@ -10,10 +10,20 @@ from typing import Optional, List, Dict
 
 
 # TO DO :
-# - scrolling to trigger lazy load
 # - refusing cookies ?
 # - clicking on a link (button) if a target link is given
 # - browse back in history
+# - having a way to input a specified lifespan for a browser (so far it is always the default one)
+
+
+# -------------------------------------------------------------------------------- #
+# -------------------------------------------------------------------------------- #
+
+
+LIFESPAN_BROWSER = 1 # in hours
+PAGE_LOADING_UNIFORM_RANGE = (2, 4) # in seconds
+PAGE_SCROLLING_UNIFORM_RANGE = (200, 400) # 100 <=> height of the browser window
+PERIOD_CLEANUP_LOOP = 300 # in seconds
 
 
 # -------------------------------------------------------------------------------- #
@@ -75,12 +85,12 @@ class BrowserInstance:
         expiration_date: datetime.datetime = None,
     ) -> None:
         self.browser = None
-        self.expiration_date = expiration_date or (datetime.datetime.now() + datetime.timedelta(hours=1))
+        self.expiration_date = expiration_date or (datetime.datetime.now() + datetime.timedelta(hours=LIFESPAN_BROWSER))
         self._initialized = False
         self.created_at = datetime.datetime.now()
         self.access_history: List[Dict] = []
 
-
+    # __INIT__ CAN NOT BE ASYNC IN PYTHON
     async def initialize(self):
         """Initialize the browser (called once)"""
         if not self._initialized:
@@ -103,7 +113,7 @@ class BrowserInstance:
         """Scrape a URL using the persistent browser"""
         if not self._initialized:
             await self.initialize()
-        
+
         access_record = {
             "url": url,
             "timestamp": datetime.datetime.now().isoformat(),
@@ -112,7 +122,8 @@ class BrowserInstance:
 
         try:
             page = await self.browser.get(url)
-            await page.sleep(random.uniform(2, 4))
+            await page.sleep(random.uniform(*PAGE_LOADING_UNIFORM_RANGE))
+            await page.scroll_down(random.randint(*PAGE_SCROLLING_UNIFORM_RANGE))
             html_content = await page.get_content()
 
             access_record["status"] = "success"
@@ -121,6 +132,7 @@ class BrowserInstance:
 
             self.access_history.append(access_record)
             return html_content
+
         except Exception as e:
             access_record["status"] = "failed"
             access_record["error"] = str(e)
@@ -172,9 +184,7 @@ class BrowserInstancePool:
     async def get_or_create_instance(self, instance_id: str) -> BrowserInstance:
         """Get existing instance or create new one"""
         if instance_id not in self.instances:
-            instance = BrowserInstance(
-                expiration_date=datetime.datetime.now() + datetime.timedelta(hours=1)
-            )
+            instance = BrowserInstance()
             await instance.initialize()
             self.instances[instance_id] = instance
 
@@ -182,9 +192,7 @@ class BrowserInstancePool:
 
         if instance.is_expired():
             await instance.close()
-            instance = BrowserInstance(
-                expiration_date=datetime.datetime.now() + datetime.timedelta(hours=1)
-            )
+            instance = BrowserInstance()
             await instance.initialize()
             self.instances[instance_id] = instance
 
@@ -227,7 +235,6 @@ async def scrape_endpoint(url: str, instance_id: str = "default"):
             "status": "success",
             "content": content,
             "instance_id": instance_id,
-            "total_requests": len(instance.access_history)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -243,7 +250,7 @@ async def close_instance(instance_id: str):
         return {
             "status": "closed",
             "instance_id": instance_id,
-            "final_stats": stats
+            "final_stats": stats,
         }
     return {"status": "not_found", "instance_id": instance_id}
 
@@ -253,7 +260,7 @@ async def list_instances():
     """List all active instances with their access history"""
     return {
         "total_instances": len(pool.instances),
-        "instances": pool.get_all_stats()
+        "instances": pool.get_all_stats(),
     }
 
 
@@ -262,10 +269,10 @@ async def get_instance_details(instance_id: str):
     """Get detailed information about a specific instance"""
     if instance_id not in pool.instances:
         raise HTTPException(status_code=404, detail=f"Instance {instance_id} not found")
-    
+
     return {
         "instance_id": instance_id,
-        **pool.instances[instance_id].get_stats()
+        **pool.instances[instance_id].get_stats(),
     }
 
 
@@ -277,7 +284,7 @@ async def get_instance_history(instance_id: str):
     
     return {
         "instance_id": instance_id,
-        "access_history": pool.instances[instance_id].access_history
+        "access_history": pool.instances[instance_id].access_history,
     }
 
 
@@ -295,15 +302,16 @@ async def get_global_stats():
         "total_requests": total_requests,
         "successful_requests": total_successful,
         "failed_requests": total_failed,
-        "instances": all_stats
+        "instances": all_stats,
     }
 
 
 @app.on_event("startup")
 async def startup_event():
+    """Cleanup expired instances regularly"""
     async def cleanup_loop():
         while True:
-            await asyncio.sleep(300)  # Every 5 minutes
+            await asyncio.sleep(PERIOD_CLEANUP_LOOP)
             await pool.cleanup_expired()
     
     asyncio.create_task(cleanup_loop())
