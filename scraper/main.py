@@ -6,6 +6,8 @@ from fastapi.responses import HTMLResponse, JSONResponse
 import ipaddress
 import nodriver as uc
 import random
+import sys
+import traceback
 from typing import Optional, List, Dict
 
 
@@ -181,10 +183,10 @@ class BrowserInstance:
             raise
 
 
-    async def close(self):
+    def close(self):
         """Explicitly close the browser"""
         if self.browser:
-            await self.browser.stop()
+            self.browser.stop()
             self._initialized = False
 
 
@@ -231,7 +233,7 @@ class BrowserInstancePool:
         instance = self.instances[instance_id]
 
         if instance.is_expired():
-            await instance.close()
+            instance.close()
             instance = BrowserInstance()
             await instance.initialize()
             self.instances[instance_id] = instance
@@ -239,14 +241,14 @@ class BrowserInstancePool:
         return instance
 
 
-    async def cleanup_expired(self):
+    def cleanup_expired(self):
         """Remove and close expired instances"""
         expired_ids = [
             instance_id for instance_id, instance in self.instances.items()
             if instance.is_expired()
         ]
         for instance_id in expired_ids:
-            await self.instances[instance_id].close()
+            self.instances[instance_id].close()
             del self.instances[instance_id]
 
 
@@ -277,22 +279,34 @@ async def scrape_endpoint(url: str, instance_id: str = "default"):
             "instance_id": instance_id,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        tb = sys.exc_info()[2]
+        line_number = tb.tb_lineno
+        raise HTTPException(
+            status_code=500,
+            detail=f"{type(e).__name__} at line {line_number}: {str(e)}"
+        )
 
 
 @app.post("/close-instance")
-async def close_instance(instance_id: str):
+def close_instance(instance_id: str):
     """Manually close a browser instance"""
-    if instance_id in pool.instances:
-        stats = pool.instances[instance_id].get_stats()
-        await pool.instances[instance_id].close()
-        del pool.instances[instance_id]
-        return {
-            "status": "closed",
-            "instance_id": instance_id,
-            "final_stats": stats,
-        }
-    return {"status": "not_found", "instance_id": instance_id}
+    try:
+        if instance_id in pool.instances:
+            stats = pool.instances[instance_id].get_stats()
+            pool.instances[instance_id].close()
+            del pool.instances[instance_id]
+            return {
+                "status": "closed",
+                "instance_id": instance_id,
+                "final_stats": stats,
+            }
+        return {"status": "not_found", "instance_id": instance_id}
+    except Exception as e:
+        line = sys.exc_info()[2].tb_lineno
+        raise HTTPException(
+            status_code=500,
+            detail=f"{type(e).__name__} at line {line}: {str(e)}"
+        )
 
 
 @app.get("/instances")
